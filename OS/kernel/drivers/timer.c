@@ -1,0 +1,120 @@
+#include "timer.h"
+#include "debug.h"
+#include "common.h"
+#include "idt.h"
+#include "task.h"
+
+uint32_t tick = 0, globalFreq;
+uint32_t pass = 0, systemTimePassed = 0;
+int32_t secondsPassed = 0;
+
+void sleep(uint32_t seconds)
+{
+	uint32_t onOrOff = pass;
+	uint32_t timePassed = 0;
+	while(timePassed != pass)
+	{
+		if(onOrOff != pass)
+		{
+			timePassed++;
+			onOrOff = pass;
+		}
+	}
+}
+
+void mSleep(uint32_t milliseconds)
+{
+	if(milliseconds > 0)
+	{
+		unsigned long eticks;
+		eticks = systemTimePassed + milliseconds;
+		while(systemTimePassed < eticks);
+	}
+}
+
+void timer_callback(pt_regs *regs)
+{
+	
+	tick = (tick + 1) % (globalFreq + 1);
+	//printk_color(rc_black, rc_red, "Tick: %d\n", tick++);
+	systemTimePassed ++;
+	if(tick == globalFreq)
+	{
+		secondsPassed ++;
+		pass = (pass + 1) % 2;
+	}
+	// 时间片的选择~
+	if(tick % 10000 == 0){// pcb中的进程剩余时间来进行调度
+		// 加调度
+		schedule();
+	}
+	//printk("tick %d\n", tick);
+	//kschedule();
+	//fschedule();
+}
+
+int32_t getSystemUpTime()
+{
+  return systemTimePassed;
+}
+
+void init_timer(uint32_t frequency)
+{
+
+	globalFreq = frequency;
+	// 注册时间相关的处理函数
+	register_interrupt_handler(IRQ0, timer_callback);
+
+	// Intel 8253/8254 PIT芯片 I/O端口地址范围是40h~43h
+	// 输入频率为 1193180，frequency 即每秒中断次数
+	uint32_t divisor = 1193180 / frequency;
+
+	// D7 D6 D5 D4 D3 D2 D1 D0
+	// 0  0  1  1  0  1  1  0
+	// 即就是 36 H
+	// 设置 8253/8254 芯片工作在模式 3 下
+	outb(0x43, 0x36);
+
+	// 拆分低字节和高字节
+	uint8_t low = (uint8_t)(divisor & 0xFF);
+	uint8_t high = (uint8_t)((divisor >> 8) & 0xFF);
+	
+	// 分别写入低字节和高字节
+	outb(0x40, low);
+	outb(0x40, high);
+}
+
+/*================RTC===================*/
+unsigned char readCMOS(unsigned char addr)
+{
+	unsigned char ret;
+	outb(0x70, addr);
+	asm volatile("jmp 1f; 1: jmp 1f;1:");
+	ret = inb(0x71);
+	asm volatile("jmp 1f; 1: jmp 1f;1:");
+	return ret;
+}
+
+
+#define BCD2BIN(bcd) ((((bcd) & 15) + ((bcd) >> 4) * 10))
+#define MINUTE 60
+#define HOUR (60*MINUTE)
+#define DAY (24*HOUR)
+#define YEAR (365*DAY)
+
+// 获取CMOS系统时间
+datetime_t getDatetime()
+{
+	datetime_t now;
+	
+	asm volatile("cli");
+	now.sec = BCD2BIN(readCMOS(0x0));
+	now.min = BCD2BIN(readCMOS(0x2));
+	now.hour = BCD2BIN(readCMOS(0x4));
+	now.day = BCD2BIN(readCMOS(0x7));
+	now.month = BCD2BIN(readCMOS(0x8));
+	now.year = BCD2BIN(readCMOS(0x9));
+	asm volatile("sti");
+	return now;
+}
+

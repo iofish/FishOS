@@ -1,0 +1,284 @@
+#include "shell.h"
+#include "common.h"
+#include "console.h"
+#include "global.h"
+#include "debug.h"
+#include "timer.h"
+#include "task.h"
+#include "sound.h"
+
+uint8_t shellIndentOn = ON, shellInput = ON;
+
+extern volatile task_t *current_task;
+extern volatile task_t *ready_queue;
+char *arguements;
+
+void parse_command()
+{
+	if(strcmp(command, "help") == 0)
+	{
+		program_help(arguements);
+		command_len = 0;
+	}else if(strcmp(command, "now") == 0)
+	{
+		program_now(arguements);
+		command_len = 0;
+	}else if(strcmp(command, "about") == 0)
+	{
+		program_about(arguements);
+		command_len = 0;
+	}else if(strcmp(command, "echo") == 0)
+	{
+		program_echo(arguements);
+		command_len = 0;
+	}else if(strcmp(command, "song") == 0)
+	{
+		program_song(arguements);
+		command_len = 0;
+	}else if(strcmp(command, "elf") == 0)
+	{
+		asm volatile("sti");
+		int task1 = fish_Fork(PRIO_HIGH, 'D');
+		command_len = 0;
+	}else
+	{
+		console_write("command not found. Type 'help' for help.");
+		console_write(command_prompt);
+		command_len = 0;
+	}
+}
+
+// 关掉indent '->'
+void turnShellIndentOnOff(int onOrOff)
+{
+	if(onOrOff == ON)
+	{
+		shellIndentOn = ON;
+	}else if(onOrOff == OFF)
+	{
+		shellIndentOn = OFF;
+	}
+}
+
+// 关掉shell输入
+void turnShellInputOnOff(int onOrOff)
+{
+	if(onOrOff == 1)
+	{
+		shellInput = ON;
+	}else if(onOrOff == 0)
+	{
+		shellInput = OFF;
+	}
+}
+
+// 添加indent '->'
+void addShellIndent()
+{
+	if(shellIndentOn == ON)
+	{
+		int cursor_xValue = getCursorXValue();
+		if(cursor_xValue == 0)	//行起始位置
+		{
+			deleteLine(-1);
+			printk("->");
+		}else{
+			printk("\n->");
+		}
+		
+	}
+}
+
+void getTypedText(int charCount, int startingYPos, int cursor_y, char *c)
+{
+  if(shellInput == ON)
+  {
+
+    uint32_t x, maxCursor_x = charCount + 2; // -> 为两个字符大小
+
+
+    uint16_t *video_memory = (uint16_t *)0xb8000;
+
+    // T黑底白字
+    uint8_t backColour = 0;
+    uint8_t foreColour = 15;
+
+    uint8_t  attributeByte = (backColour << 4) | (foreColour & 0x0F);
+    uint16_t attribute = attributeByte << 8;
+    uint16_t *location;
+
+    c += charCount;
+
+    for(x = 0; x < charCount + 1; x++)
+    {
+      location = video_memory + (startingYPos * 80 + maxCursor_x - x);
+      *c = *location | attribute;
+      c--;
+    }
+
+    c++;
+    *(c + charCount) = 0; //
+  }
+
+}
+
+
+// 任务列表
+typedef struct
+{
+	char name[16];
+	uint32_t priority;
+	uint32_t burst_time;
+	uint8_t own_multitask;
+}programs_list_t;
+
+#define PROGRAM_LIST_NUMBER	5
+
+programs_list_t programsList[PROGRAM_LIST_NUMBER] = 
+{
+	// 任务名称如下
+	"hello", PRIO_LOW, PROC_VERY_SHORT, FALSE,
+	"help", PRIO_LOW, PROC_VERY_SHORT, FALSE,
+	"song", PRIO_MED, PROC_MED, FALSE,
+	"now", PRIO_LOW, PROC_VERY_SHORT, FALSE,
+	"echo", PRIO_IDLE, PROC_VERY_SHORT, TRUE,
+	"about", PRIO_LOW, PROC_VERY_SHORT, FALSE
+};
+
+void executeInput(char *input, char *arguements)
+{
+	if(shellInput == ON)
+	{
+		int x;
+		for(x = 0; x < PROGRAM_LIST_NUMBER; x++)
+		{
+			uint8_t multitask = is_enable_multitask(arguements);
+			if(multitask == TRUE && programsList[x].own_multitask == FALSE)
+			{
+				int32_t pid = fork(programsList[x].priority, programsList[x].burst_time, programsList[x].name);
+				if(!pid)
+				{
+					runShellFunction(x, arguements, programsList[x].priority, programsList[x].burst_time, multitask);
+					exit();
+				}
+			}else{
+				runShellFunction(x, arguements, programsList[x].priority, programsList[x].burst_time, multitask);
+				return;			
+			}
+	
+		}
+
+		int length = strlen(input);
+		if(length)
+		{
+			printk("%s : command not found. Type 'help' for help.\n", input);
+		}	
+	}
+}
+
+uint8_t is_enable_multitask(char *arguements)
+{
+	uint32_t len = strlen(arguements);
+
+	if(*(arguements + len - 2) == ' ' && *(arguements + len - 1) == '&' && *(arguements + len) == 0)
+	{
+		// 删掉 '&'
+		*(arguements + len - 2) = 0;
+		*(arguements + len - 1) = 0;
+		return TRUE;
+	}else{
+		return FALSE;
+	}
+}
+
+
+// 运行shell输出的程序
+void runShellFunction(uint32_t runFunction, char *arguements, uint32_t priority, uint32_t burst_time, uint8_t multitask)
+{
+	switch(runFunction)
+	{
+		case 0:
+			program_hello(arguements);
+			break;
+		case 1:
+			program_help(arguements);
+			break;
+		case 2:
+			program_now(arguements);
+			break;
+		case 3:
+			program_song(arguements);
+			break;
+		case 4:
+			{
+				if(multitask == TRUE)			
+				{
+					int32_t pid = fork(priority, burst_time, "echo");
+					if(pid)
+					{
+						task_t *cur;
+						cur = (task_t *)ready_queue;
+						while(cur && cur -> id != pid)
+							cur = cur -> next;
+
+						if(!cur)
+						{
+							printk("Multitask failed!\n");
+							kill_task(pid);
+							return;
+						}
+						set_current_task(cur);
+					}else if(!pid){
+						program_echo(arguements);
+					}
+				}
+			break;
+			}
+		case 5:
+			program_about(arguements);
+			break;		
+		default:
+			program_hello(arguements);
+			return;
+	}
+}
+void program_hello(char *arguements)
+{
+	printk("hello world!\n");
+}
+
+void program_help(char *arguements)
+{
+	printk("Help list:");
+	printk("\n\tabout - about the project");
+	printk("\n\techo  - prints text");
+	printk("\n\tnow   - prints the date");
+	printk("\n\tsong  - plays a song");
+	printk("\n\thelp  - help list");
+	printk("\n\telf   - elf program\n");
+}
+
+void program_about(char *arguements)
+{
+	printk("Welcome to FishOs.\n");
+	printk("Copyright (c) 2016. All rights reserved.\n");
+}
+
+void program_now(char *arguements)
+{
+	datetime_t time;
+	time = getDatetime();
+	printk("%d:%d:%d %d/%d/%d\n", time.hour, time.min, time.sec, time.month, time.day, time.year);
+}
+
+void program_song(char *arguements)
+{
+	asm volatile("sti");
+	init_timer(globalFreq);
+	song();
+}
+
+void program_echo(char *arguements)
+{
+	printk("%s\n", arguements);
+}

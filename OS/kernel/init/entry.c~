@@ -1,0 +1,135 @@
+
+#include "console.h"
+#include "debug.h"
+#include "gdt.h"
+#include "idt.h"
+#include "timer.h"
+#include "pmm.h"
+#include "paging.h"
+#include "keyboard.h"
+#include "shell.h"
+#include "global.h"
+#include "fat32.h"
+#include "task.h"
+
+uint32_t kern_stack_top; // 内核栈的栈顶
+int32_t task_array[3];
+
+int flag = 0;
+int number = 10;
+int thread(void *arg)
+{
+	while(number >= 0)
+	{
+	if(flag == 1)
+		{
+			printk_color(rc_black, rc_green, "%d", (10 - number));
+			flag = 2;
+			number --;	
+		}
+	}
+	return 0;
+}
+
+int thread2(void *arg)
+{
+	while(number >= 0)
+	{
+		if(flag == 2)
+		{
+			printk("C");	
+			flag = 0;
+		}
+	}
+	return 5;
+}
+
+int kern_entry()
+{	
+	init_gdt();
+	init_idt();
+	console_clear();
+	printk("GDT loaded successed.\n");
+	printk("IDT loaded successed.\n");
+	asm volatile ("sti");
+	init_timer(1000);
+	printk("Timer set successed, one tick/ms.\n");
+	// 开启中断
+	//init_paging();	
+	//init_tasking();
+	init_fat32();
+	printk("Hard Drive for FAT32 initial successed!\n");
+	init_fishtask();
+	int task1 = fish_Fork(PRIO_HIGH, 'A');
+	int task2 = fish_Fork(PRIO_MED, 'B');
+	int task3 = fish_Fork(PRIO_LOW, 'C');
+	int task4 = fish_Fork(PRIO_HIGH, 'D');
+	int task5 = fish_Fork(PRIO_MED, 'E');
+	//int task6 = fish_Fork(PRIO_LOW, 'F');
+	int task7 = fish_Fork(PRIO_HIGH, 'G');
+	int task8 = fish_Fork(PRIO_MED, 'H');
+	int task9 = fish_Fork(PRIO_LOW, 'I');
+	//printk("task1 %d\ntask2 %d\ntask3 %d\n",task1, task2, task3);
+	//exec();
+	//schedule(); //100b42
+	//execute();	
+	//switch_process(s);
+/*
+	init_sched();
+
+	kernel_thread(thread, NULL);
+	asm volatile ("sti");
+	kernel_thread(thread2, NULL);
+	asm volatile ("sti");
+	while (number >= 0) {
+		if (flag == 0) {
+			printk_color(rc_black, rc_red, "A");
+			flag = 1;
+		}
+	}
+*/
+	
+	init_keyboard();//100b47
+	addShellIndent();	
+	printk("kerboard & tiny shell initial successed.\n");
+   while (1)
+    {
+        // 从键盘获取一个输入的字符
+        char keyboard_input = get_char_from_keyboard();
+        // 输出该字符
+        if (keyboard_input == 0x8)
+        {
+  
+	   // 退格键
+            if (command_len == 0)
+            {
+                continue;
+            }
+            if (command_len > 0)
+            { 
+                --command_len;
+                console_putc_color(keyboard_input, rc_black, rc_white);
+                console_putc_color(' ', rc_black, rc_white);
+                console_putc_color(keyboard_input, rc_black, rc_white);
+            }
+        }
+        else if (keyboard_input == '\n')
+        {
+            // 换行键
+	    console_putc_color(keyboard_input, rc_black, rc_red);
+            command[command_len++] = '\0';
+            command_len = 0;
+            
+            // 解析命令行，执行相应操作
+            parse_command();
+	    addShellIndent();
+        }else
+	{
+		console_putc_color(keyboard_input, rc_black, rc_red);
+		command[command_len++] = keyboard_input;
+	}
+    }
+
+	return 0;
+}
+

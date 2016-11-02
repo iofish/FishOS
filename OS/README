@@ -1,0 +1,10 @@
+  When we use Makefile`s command make/make all, it will complile the loader.asm
+and refatmat the fishos.img. So, We need to put the fat32.bin in the fishos.img the right place.
+  In the propram, the Partition Disk will be the place of 2048th Sector, with the value of 1048576.
+  In the Windows Operating System, there is a program to wirte files into IMG files.
+
+
+	//硬盘读写已经ok,下一步elf头文件的解析和加载
+	//elf头文件解析和加载基本完成,下一步进程的返回...
+	//新系统调试成功
+

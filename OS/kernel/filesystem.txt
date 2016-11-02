@@ -1,0 +1,50 @@
+//2016-05-13 09:33:24
+//开始着手文件系统的基本设计与实现，这里需要
+// 1. 初始化硬盘中断
+/*	MACRO		PORT			DESCRIPTION			INPUT/OUTPUT	*/
+/*	-----		----			-----------			------------	*/
+0x1F0		/*	Data				I/O		*/
+0x1F1		/*	Features			O		*/
+0x1F2		/*	Sector Count			I/O		*/
+0x1F3		/*	Sector Number / LBA Bits 0-7	I/O		*/
+0x1F4		/*	Cylinder Low / LBA Bits 8-15	I/O		*/
+0x1F5		/*	Cylinder High / LBA Bits 16-23	I/O		*/
+0x1F6		/*	Drive | Head | LBA bits 24-27	I/O		*/
+/*	Drive | Head | LBA bits 24-27	I/O		*/
+// |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+// +-----+-----+-----+-----+-----+-----+-----+-----+
+// |  1  |  L  |  1  | DRV | HS3 | HS2 | HS1 | HS0 |
+// +-----+-----+-----+-----+-----+-----+-----+-----+
+// 		|           |   \_____________________/
+// 		|           |              |
+// 		|           |              `------------ If L=0, Head Select.
+//         |           |                                   These four bits select the head number.
+//         |           |                                   HS0 is the least significant.
+//         |           |                            If L=1, HS0 through HS3 contain bit 24-27 of the LBA.
+//         |           `--------------------------- Drive. When DRV=0, drive 0 (master) is selected. 
+//         |                                               When DRV=1, drive 1 (slave) is selected.
+//        `--------------------------------------- LBA mode. This bit selects the mode of operation.
+//                                                         When L=0, addressing is by 'CHS' mode.
+//                                                        When L=1, addressing is by 'LBA' mode.
+// */
+// 使用的是LBA寻址模式，LBA被拆分成了四个部分，在LBA中HS0 到HS3是程序的24 - 27 位，LBA Low 指向0 - 7位，
+// LBA Mid 指向 8 - 15 位， LBA High 指向第 16 - 23 位， 整个LBA是28位的。
+// #define MAKE_DEVICE_REG(lba, drv, lba_highest) (((lba)<<6) | ((drv)<<4) | (lba_highest & 0xF) | 0xA0)
+   使用这个宏定义来处理Device Register
+
+//0x1F7		/*	Status				I		*/
+/* 	Any pending interrupt is cleared whenever this register is read.
+	|  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+	+-----+-----+-----+-----+-----+-----+-----+-----+
+	| BSY | DRDY|DF/SE|  #  | DRQ |     |     | ERR |
+	+-----+-----+-----+-----+-----+-----+-----+-----+
+	   |     |     |     |     |     |     |     |
+	   |     |     |     |     |     |     |     `--- 0. Error.(an error occurred)
+	   |     |     |     |     |     |     `--------- 1. Obsolete.
+	   |     |     |     |     |     `--------------- 2. Obsolete.
+	   |     |     |     |     `--------------------- 3. Data Request. (ready to transfer data)
+	   |     |     |     `--------------------------- 4. Command dependent. (formerly DSC bit)
+	   |     |     `--------------------------------- 5. Device Fault / Stream Error.
+	   |     `--------------------------------------- 6. Drive Ready.
+	   `--------------------------------------------- 7. Busy. If BSY=1, no other bits in the register are valid.
+*/

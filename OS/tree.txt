@@ -1,0 +1,83 @@
+.
+├── bochsout.txt
+├── bochsrc.txt
+├── boot.asm
+├── diskimage.sh
+├── elf_file
+│   ├── hello2.bin
+│   ├── hello3.bin
+│   ├── hello.bin
+│   └── readme.txt
+├── fat32.asm
+├── fatmat.cpp
+├── fishos.img
+├── kernel
+│   ├── boot
+│   │   └── boot.s
+│   ├── drivers
+│   │   ├── console.c
+│   │   ├── elf.c
+│   │   ├── fat32.c
+│   │   ├── keyboard.c
+│   │   ├── shell.c
+│   │   ├── sound.c
+│   │   └── timer.c
+│   ├── filesystem.txt
+│   ├── gdt
+│   │   ├── gdt.c
+│   │   └── gdt_s.s
+│   ├── idt
+│   │   ├── idt.c
+│   │   └── idt_s.s
+│   ├── include
+│   │   ├── common.h
+│   │   ├── console.h
+│   │   ├── debug.h
+│   │   ├── elf.h
+│   │   ├── fat32.h
+│   │   ├── fs.h
+│   │   ├── gdt.h
+│   │   ├── global.h
+│   │   ├── idt.h
+│   │   ├── keyboard.h
+│   │   ├── ordered_array.h
+│   │   ├── paging.h
+│   │   ├── pmm.h
+│   │   ├── sched.h
+│   │   ├── shell.h
+│   │   ├── sound.h
+│   │   ├── string.h
+│   │   ├── task.h
+│   │   ├── timer.h
+│   │   ├── types.h
+│   │   └── vargs.h
+│   ├── init
+│   │   └── entry.c
+│   ├── kernel
+│   │   └── debug
+│   │       └── printk.c
+│   ├── libs
+│   │   ├── common.c
+│   │   ├── lib.s
+│   │   └── string.c
+│   ├── Makefile
+│   ├── mm
+│   │   ├── paging.c
+│   │   └── pmm.c
+│   ├── process.txt
+│   ├── scripts
+│   │   ├── gdbinit
+│   │   └── kernel.ld
+│   └── task
+│       ├── ordered_array.c
+│       ├── process.s
+│       ├── sched.c
+│       ├── switch_to.s
+│       └── task.c
+├── Makefile
+├── pm.inc
+├── q.txt
+├── README
+└── tree.txt
+
+14 directories, 66 files

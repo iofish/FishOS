@@ -1,0 +1,178 @@
+// 2016年05月10日20:12:06
+// 用来定义进程任务相关数据
+
+#ifndef TASK_H
+#define TASK_H
+
+#include "common.h"
+#include "paging.h"
+#include "gdt.h"
+
+#define MAX_TASK 5
+#define KERNEL_STACK_SIZE 2048
+
+// process优先级
+#define PRIO_DEAD 9999
+#define PRIO_IDLE 0
+#define PRIO_LOW 100
+#define PRIO_MED 200
+#define PRIO_HIGH 300
+// process长度
+#define PROC_VERY_LONG 10
+#define PROC_LONG 30
+#define PROC_MED 50
+#define PROC_SHORT 70
+#define PROC_VERY_SHORT 90
+
+
+
+// 进程状态描述
+typedef
+enum task_state {
+	TASK_UNINIT = 0, 	// 未初始化
+	TASK_SLEEPING = 1, 	// 睡眠中
+	TASK_RUNNABLE = 2, 	// 可运行(也许正在运行)
+	TASK_ZOMBIE = 3, 	// 僵尸状态
+} task_state;
+
+// 内核线程的上下文切换保存的信息
+struct context {
+	uint32_t esp;
+	uint32_t ebp;
+	uint32_t ebx;
+	uint32_t esi;
+	uint32_t edi;
+	uint32_t eflags;
+};
+
+// 进程内存地址结构
+struct mm_struct {
+	uint32_t *pgd_dir; 	// 进程地址
+};
+
+// 进程控制块 PCB 
+typedef struct task_struct {
+	volatile task_state state; 	// 进程当前状态
+	int32_t  pid; 			// 进程标识符
+	void  	*stack; 		// 进程的内核栈地址
+	struct mm_struct *mm; 		// 当前进程的内存地址映像
+	struct context context; 	// 进程切换需要的上下文信息
+	struct task_struct *next; 	// 链表指针
+}task_struct_t __attribute__((packed));;
+
+typedef struct fish_task{
+	uint32_t esp0;
+	int32_t task_id;	// 进程id号
+	uint16_t tss_selector;   //tss的选择子
+	uint32_t *entry;	// 进程入口地址
+	uint32_t priority;	// 进程优先级
+	uint32_t start_time;	// 进程分配时间片的时间
+	uint32_t end_time;	// 进程结束时候时间
+	tss_entry_t* tss;	// 进程的TSS的指针
+	struct fish_task *next;	// 链表指针
+}fish_task_t __attribute__((packed));
+// 全局 pid 值
+extern int32_t now_pid;
+
+// 内核线程创建
+int32_t kernel_thread(int (*fn)(void *), void *arg);
+
+// 线程退出函数
+void kthread_exit();
+
+//进程的PCB
+typedef struct task
+{
+	uint32_t id;			//进程ID号
+	uint32_t esp, ebp;	//栈和基址指针
+	uint32_t eip;		// 指令指针
+	uint32_t priority;	// 进程的优先级
+	uint32_t burst_time;	// 进程发生时间
+	uint32_t averaged_priority; // 优先级和发生时间的平均值
+	uint32_t time_to_run;	// 剩余时间
+	uint32_t time_running;	// 执行时间
+	uint32_t ready_to_run;	// 就绪态
+	page_directory_t *page_directory; // 页目录
+	void (*thread)();
+	uint32_t thread_flags;
+	uint32_t stack;		// 内核栈位置
+	uint32_t originalStack; // 原始内核位置
+	struct task *next;	// 下一个任务的指针
+} task_t;
+
+//进程的固定调度的结构体
+typedef struct task_schedule
+{	
+	uint32_t sch_maigc;		// 魔数，固定值
+	uint32_t alloc_time;
+	uint32_t used_time;
+	struct task next[MAX_TASK];
+	uint32_t *physcialAddr;		//schedule的固定地址
+	
+}task_schedule_t __attribute__((packed));
+
+extern volatile task_t *ready_queue;
+
+extern volatile task_t *current_task;
+
+
+void init_fishtask();
+// 加载进程
+void load_task();
+// 初始化进程
+void init_tasking();
+// 任务进程
+void task_switch();
+// 创建进程
+int fork();
+int32_t fish_Fork(uint32_t priority, char *task_Name);
+// 切换进程的栈
+void move_stack(void *new_stack_start, uint32_t size);
+// 获取进程id
+int getpid();
+// 切换进程
+void switch_task_to(fish_task_t *next);
+// 进程调度
+void fschedule();
+void schedule();
+//退出当前进程
+void exit();
+// 测试多任务
+void tasking_test();
+// kill 进程
+int kill_task(uint32_t pid);
+void set_esp0(uint32_t new);
+// 执行任务
+int32_t start_task(uint32_t priority, uint32_t burst_time, void (*func)(), void *arg, char *task_Name);
+
+// fork
+int32_t nfork(uint32_t priority, uint32_t burst_time, char *task_Name);
+// 设置当前任务
+void set_current_task(task_t *task_to_set);
+
+// 执行进程队列
+void run();
+// 前一个指针
+fish_task_t *parent_of_task(fish_task_t *src);
+// 进程队列顺序改变
+void swap_task_locations(fish_task_t *dest, fish_task_t *src);
+
+
+#define switch_context(new) do {                                        \
+    set_esp0(new->esp0);                                                \
+    uint32_t eax;                                                       \
+    asm volatile ("movl %1, %%esp\n\t"                                  \
+                  "pop %%eax\n\t"                                       \
+                  "mov %%ax, %%ds\n\t"                                  \
+                  "mov %%ax, %%es\n\t"                                  \
+                  "mov %%ax, %%fs\n\t"                                  \
+                  "mov %%ax, %%gs\n\t"                                  \
+                  "popa\n\t"                                            \
+                  "add $8, %%esp\n\t"                                   \
+                  "iret\n\t"                                            \
+                  : "=a"(eax)                                           \
+                  : "g"(new->esp0)                                      \
+                  : "%ebx", "%ecx", "%edx", "%esi", "%edi");            \
+    } while (0);
+
+#endif // TASK_H
