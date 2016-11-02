@@ -1,6 +1,7 @@
 # FishOS
 FishOs 是一个具有操作系统完全功能的小型内核
 实现的功能列表:
+
 1. 正常的自启动 boot程序 (现在常用的是grub启动,可以在osdev.org网站上查找grub multiboot启动的过程),本系统是在FAT32文件系统上实现的BOOT程序
 
 2. 加载程序Loader,对FAT32文件系统的分区进行了接之后,将Loader程序放在FAT32文件的从分区上面,同上可以使用现在比较成熟的Grub技术
